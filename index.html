@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta Check - Análise Calgary-Cambridge</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background-color: #f4f7f6; color: #333; }
+        h1, h2, h3 { color: #2c3e50; }
+        .hidden { display: none !important; }
+        .card { background: white; border: 1px solid #e1e4e8; padding: 30px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        
+        /* Botões */
+        button { padding: 12px 24px; cursor: pointer; border: none; border-radius: 8px; font-weight: 600; transition: 0.2s; font-size: 1rem;}
+        .btn-primary { background-color: #007bff; color: white; box-shadow: 0 2px 4px rgba(0,123,255,0.3); }
+        .btn-primary:hover { background-color: #0056b3; transform: translateY(-1px); }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; font-size: 0.9em; padding: 8px 16px;}
+        button:disabled { background-color: #cbd3da; cursor: not-allowed; border-color: #cbd3da; color: #fff; box-shadow: none; transform: none;}
+
+        /* Inputs e Layout */
+        input[type="text"], input[type="password"] { width: 100%; padding: 12px; margin: 8px 0 20px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+        
+        /* Status e Feedback */
+        #status { font-weight: bold; margin: 15px 0; padding: 15px; border-radius: 8px; background: #e9ecef; text-align: center; color: #495057;}
+        pre { background: #2d2d2d; color: #f8f8f2; padding: 20px; border-radius: 8px; white-space: pre-wrap; overflow-x: auto; font-size: 0.9em; max-height: 400px; overflow-y: scroll; }
+        .recording-box { border: 2px dashed #007bff; padding: 30px; text-align: center; border-radius: 12px; margin-top: 20px; background: #f0f7ff; transition: all 0.3s; }
+        .recording-active { border-color: #dc3545; background: #fff5f5; animation: pulse 1.5s infinite; }
+        
+        /* Checklist Style - Enhanced */
+        .checklist-section { margin-bottom: 25px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        .checklist-section h4 { margin-bottom: 10px; color: #444; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; }
+        .checklist-item { margin: 10px 0; padding: 12px; border-radius: 6px; background: #f8f9fa; border-left: 5px solid #ddd; display: flex; align-items: flex-start; gap: 10px; }
+        .checklist-pass { border-left-color: #28a745; background: #eefbf3; }
+        .checklist-fail { border-left-color: #dc3545; background: #fff5f5; }
+        .checklist-icon { font-size: 1.2em; line-height: 1; }
+        .checklist-content { flex: 1; }
+        .checklist-title { font-weight: bold; display: block; margin-bottom: 4px; }
+        .checklist-comment { font-size: 0.9em; color: #666; font-style: italic; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 10px; margin-bottom: 0; padding-bottom: 0; }
+        .tab-btn { background: #e9ecef; border: none; color: #666; padding: 12px 20px; border-radius: 8px 8px 0 0; margin-bottom: -1px; border: 1px solid transparent; }
+        .tab-btn.active { background: white; color: #007bff; border: 1px solid #e1e4e8; border-bottom-color: white; font-weight: bold; z-index: 2;}
+        .tab-content { border-top-left-radius: 0; }
+
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); } 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); } }
+    </style>
+</head>
+<body>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1>🩺 Consulta Check <span style="font-size:0.6em; color:#777; font-weight:normal;">Baseado em Calgary-Cambridge</span></h1>
+        <button onclick="resetApp()" class="btn-secondary">⚙️ Configurações</button>
+    </div>
+
+    <div id="configSection" class="card hidden">
+        <h2>🔐 Configuração</h2>
+        <p style="color:#666; font-size:0.9em;">Insira sua chave API do Google Gemini para ativar o auditor.</p>
+        
+        <label><strong>API Key do Google Gemini:</strong></label>
+        <input type="password" id="apiKeyInput" placeholder="Cole sua chave aqui (AIza...)">
+        
+        <label><strong>ID do Modelo:</strong></label>
+        <input type="text" id="modelIdInput" value="gemini-2.5-flash" placeholder="ex: gemini-2.5-flash">
+        
+        <button onclick="saveConfig()" class="btn-primary" style="width: 100%;">Salvar e Acessar</button>
+    </div>
+
+    <div id="mainSection" class="hidden">
+        
+        <div class="card">
+            <h2>Nova Análise de Consulta</h2>
+            
+            <label style="display:block; margin-bottom: 10px;"><strong>Fonte do Áudio da Consulta:</strong></label>
+            
+            <div style="margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 8px; display:flex; align-items:center; gap:10px;">
+                <span style="font-size:1.5em;">📁</span>
+                <div style="flex:1;">
+                    <input type="file" id="audioFileInput" accept="audio/*,video/*" onchange="handleFileSelect()" style="margin:0; width:100%;">
+                </div>
+            </div>
+
+            <div style="text-align: center; color:#999; margin: 10px 0; font-size:0.9em;">— OU —</div>
+
+            <div id="recordingArea" class="recording-box">
+                <p id="micStatus" style="font-weight:bold; margin-bottom:15px;">🎙️ Gravar Consulta no Navegador</p>
+                <button id="btnGravar" onclick="startRecording()" class="btn-primary">Iniciar Gravação</button>
+                <button id="btnParar" onclick="stopRecording()" class="btn-danger" disabled>Parar</button>
+            </div>
+
+            <button id="btnProcessar" onclick="processAnalysis()" class="btn-primary" style="width: 100%; margin-top: 25px; padding: 18px; font-size: 1.2em;" disabled>
+                🔍 Analisar Performance do Médico
+            </button>
+            
+            <div id="status" class="hidden"></div>
+        </div>
+
+        <div id="resultsArea" class="hidden">
+            <div class="tabs">
+                <button onclick="showTab('tab-analysis')" class="tab-btn active" id="btn-tab-analysis">📊 Relatório de Performance</button>
+                <button onclick="showTab('tab-transcript')" class="tab-btn" id="btn-tab-transcript">💬 Transcrição Completa</button>
+            </div>
+
+            <!-- ANÁLISE -->
+            <div id="tab-analysis" class="card tab-content">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:15px; margin-bottom:15px;">
+                    <h3 style="margin:0;">Avaliação Calgary-Cambridge</h3>
+                    <button onclick="copyToClipboard('outputAnalysis')" class="btn-secondary">Copiar Relatório</button>
+                </div>
+                <div id="outputAnalysis" style="line-height: 1.6;">Processando...</div>
+            </div>
+
+            <!-- TRANSCRIÇÃO -->
+            <div id="tab-transcript" class="card tab-content hidden">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3>Transcrição (Verbatim)</h3>
+                    <button onclick="copyToClipboard('outputTranscript')" class="btn-secondary">Copiar Texto</button>
+                </div>
+                <p style="font-size:0.9em; color:#666;">Utilizada como base para a análise.</p>
+                <pre id="outputTranscript">Processando...</pre>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let activeAudioBlob = null;
+        let genAI;
+
+        // --- AUTH ---
+        window.checkAuth = function() {
+            const key = localStorage.getItem("gemini_api_key");
+            const modelId = localStorage.getItem("gemini_model_id") || "gemini-2.5-flash";
+
+            if (key) {
+                document.getElementById('configSection').classList.add('hidden');
+                document.getElementById('mainSection').classList.remove('hidden');
+                document.getElementById('apiKeyInput').value = key;
+                document.getElementById('modelIdInput').value = modelId;
+                genAI = new GoogleGenerativeAI(key);
+            } else {
+                document.getElementById('configSection').classList.remove('hidden');
+                document.getElementById('mainSection').classList.add('hidden');
+            }
+        }
+
+        window.saveConfig = function() {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            const modelId = document.getElementById('modelIdInput').value.trim();
+            if (key.length > 10) {
+                localStorage.setItem("gemini_api_key", key);
+                localStorage.setItem("gemini_model_id", modelId);
+                checkAuth();
+            } else { alert("Chave inválida."); } 
+        }
+
+        window.resetApp = function() {
+            document.getElementById('mainSection').classList.add('hidden');
+            document.getElementById('configSection').classList.remove('hidden');
+        }
+
+        // --- UI TABS ---
+        window.showTab = function(tabId) {
+            ['tab-analysis', 'tab-transcript'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            ['btn-tab-analysis', 'btn-tab-transcript'].forEach(id => document.getElementById(id).classList.remove('active'));
+            document.getElementById(tabId).classList.remove('hidden');
+            document.getElementById('btn-' + tabId).classList.add('active');
+        }
+
+        // --- AUDIO ---
+        window.handleFileSelect = function() {
+            const fileInput = document.getElementById('audioFileInput');
+            if(fileInput.files && fileInput.files[0]) {
+                activeAudioBlob = fileInput.files[0]; 
+                document.getElementById('btnProcessar').disabled = false;
+                document.getElementById('status').innerText = `Arquivo pronto: ${activeAudioBlob.name}`;
+                document.getElementById('status').classList.remove('hidden');
+            }
+        }
+
+        window.startRecording = async function() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+                mediaRecorder.onstop = () => {
+                    activeAudioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    document.getElementById('btnProcessar').disabled = false;
+                    document.getElementById('status').innerText = "Áudio gravado com sucesso.";
+                    document.getElementById('recordingArea').classList.remove('recording-active');
+                    document.getElementById('micStatus').innerText = "🎙️ Gravação finalizada.";
+                };
+                mediaRecorder.start();
+                document.getElementById('btnGravar').disabled = true;
+                document.getElementById('btnParar').disabled = false;
+                document.getElementById('recordingArea').classList.add('recording-active');
+                document.getElementById('micStatus').innerText = "🔴 Gravando...";
+            } catch (err) { alert("Erro ao acessar microfone: " + err); } 
+        }
+
+        window.stopRecording = function() {
+            mediaRecorder.stop();
+            document.getElementById('btnGravar').disabled = false;
+            document.getElementById('btnParar').disabled = true;
+        }
+
+        async function fileToGenerativePart(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve({
+                    inlineData: { data: reader.result.split(',')[1], mimeType: file.type || "audio/mp3" }
+                });
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // --- CORE PROCESS ---
+        window.processAnalysis = async function() {
+            if (!activeAudioBlob) return alert("Nenhum áudio selecionado!");
+            
+            const btn = document.getElementById('btnProcessar');
+            const status = document.getElementById('status');
+            const resultsArea = document.getElementById('resultsArea');
+            const currentModelId = localStorage.getItem("gemini_model_id") || "gemini-2.5-flash";
+
+            btn.disabled = true;
+            status.classList.remove('hidden');
+            resultsArea.classList.remove('hidden');
+            
+            // Limpa
+            document.getElementById('outputTranscript').innerText = "Transcrevendo diálogo...";
+            document.getElementById('outputAnalysis').innerHTML = "<div style='text-align:center; padding:20px;'>⌛ Analisando critérios do Guia Calgary-Cambridge...</div>";
+
+            try {
+                const model = genAI.getGenerativeModel({ model: currentModelId });
+                const audioPart = await fileToGenerativePart(activeAudioBlob);
+
+                // ETAPA 1: Transcrição
+                status.innerText = "Etapa 1/2: Ouvindo e transcrevendo a consulta...";
+                
+                const transcriptPrompt = `
+                Transcreva o áudio da consulta médica a seguir palavra por palavra (verbatim).
+                Identifique claramente os falantes como 'Médico:' e 'Paciente:' (ou 'Acompanhante:').
+                Mantenha termos técnicos se usados, mas também as expressões coloquiais do paciente.
+                Não resuma.
+                `;
+
+                const resultTranscript = await model.generateContent([transcriptPrompt, audioPart]);
+                const transcriptText = (await resultTranscript.response).text();
+                
+                document.getElementById('outputTranscript').innerText = transcriptText;
+
+                // ETAPA 2: Análise
+                status.innerText = "Etapa 2/2: Avaliando performance médica...";
+
+                const analysisPrompt = `
+                ATUE COMO UM SUPERVISOR DE COMUNICAÇÃO MÉDICA SÊNIOR E RIGOROSO.
+                
+                Objetivo: Avaliar a consulta transcrita abaixo usando o "Guia Calgary-Cambridge".
+                
+                --- TRANSCRIÇÃO DA CONSULTA ---
+                ${transcriptText}
+                --- FIM DA TRANSCRIÇÃO ---
+
+                TAREFA:
+                Gere um relatório estruturado avaliando cada ponto.
+                
+                REGRA CRUCIAL DE FORMATAÇÃO:
+                Para CADA item, você DEVE iniciar a linha com:
+                "- [S]" se o critério foi SATISFATÓRIO/CUMPRIDO.
+                "- [N]" se o critério foi NÃO CUMPRIDO, ESQUECIDO ou INSATISFATÓRIO.
+                
+                NÃO use [x] ou [ ]. Use APENAS [S] ou [N].
+                
+                ESTRUTURA OBRIGATÓRIA DA RESPOSTA:
+
+                ### 1. INICIANDO A SESSÃO
+                - [S] ou [N] **Preparação:** Se apresentou e confirmou identidade?
+                  > *Evidência:* ...
+                - [S] ou [N] **Rapport Inicial:** Demonstrou respeito inicial?
+                  > *Evidência:* ...
+
+                ### 2. IDENTIFICANDO O MOTIVO DA CONSULTA
+                - [S] ou [N] **Pergunta Aberta:** Iniciou com "O que o traz aqui?" ou similar?
+                  > *Evidência:* ...
+                - [S] ou [N] **Escuta Ativa:** Ouviu sem interromper?
+                  > *Evidência:* ...
+                - [S] ou [N] **Agenda Oculta:** Perguntou "Algo mais?" para descobrir outras queixas?
+                  > *Evidência:* ...
+
+                ### 3. REUNINDO INFORMAÇÕES
+                - [S] ou [N] **História do Paciente:** Encorajou a fala livre?
+                  > *Evidência:* ...
+                - [S] ou [N] **Funil de Perguntas:** Aberta -> Fechada?
+                  > *Evidência:* ...
+                - [S] ou [N] **Perspectiva do Paciente (F.I.F.E):** Explorou Sentimentos, Ideias, Funcionalidade ou Expectativas?
+                  > *Evidência:* ...
+
+                ### 4. ESTRUTURAÇÃO
+                - [S] ou [N] **Sinalização:** Usou frases de transição?
+                  > *Evidência:* ...
+                - [S] ou [N] **Organização:** Sequência lógica?
+                  > *Evidência:* ...
+
+                ### 5. CONSTRUINDO RELACIONAMENTO
+                - [S] ou [N] **Empatia:** Validou sentimentos?
+                  > *Evidência:* ...
+                - [S] ou [N] **Não-verbal (Inferido):** Tom acolhedor?
+                  > *Evidência:* ...
+
+                ### 6. EXPLICAÇÃO E PLANEJAMENTO
+                - [S] ou [N] **Linguagem:** Evitou jargões?
+                  > *Evidência:* ...
+                - [S] ou [N] **Chunk and Check:** Informação em blocos?
+                  > *Evidência:* ...
+                - [S] ou [N] **Teach-back:** Pediu para o paciente repetir/explicar?
+                  > *Evidência:* ...
+                - [S] ou [N] **Decisão Compartilhada:** Envolveu na decisão?
+                  > *Evidência:* ...
+
+                ### 7. FECHAMENTO
+                - [S] ou [N] **Resumo:** Resumiu o plano?
+                  > *Evidência:* ...
+                - [S] ou [N] **Safety Netting:** Explicou sinais de alerta?
+                  > *Evidência:* ...
+
+                ### 8. CONCLUSÃO FINAL
+                (Breve resumo qualitativo).
+                `;
+
+                const resultAnalysis = await model.generateContent(analysisPrompt);
+                const analysisText = (await resultAnalysis.response).text();
+
+                // --- PARSER ROBUSTO (S/N) ---
+                let html = analysisText;
+
+                // Headers
+                html = html.replace(/^### (.*$)/gim, '<div class="checklist-section"><h4>$1</h4>');
+                
+                // Item [S] = Sim / Cumprido (Verde)
+                html = html.replace(/- \[S\] \*\*(.*?)\*\*(.*?)(\n|$)/gim, 
+                    '<div class="checklist-item checklist-pass"><span class="checklist-icon">✓</span><div class="checklist-content"><span class="checklist-title">$1</span>');
+                
+                // Item [N] = Não / Falha (Vermelho)
+                html = html.replace(/- \[N\] \*\*(.*?)\*\*(.*?)(\n|$)/gim, 
+                    '<div class="checklist-item checklist-fail"><span class="checklist-icon">✗</span><div class="checklist-content"><span class="checklist-title">$1</span>');
+
+                // Comentários
+                html = html.replace(/> \*(.*?)\* (.*?)(\n|$)/gim, 
+                    '<div class="checklist-comment">$1 $2</div></div></div>'); 
+
+                // Bold e cleanup
+                html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+                
+                document.getElementById('outputAnalysis').innerHTML = html;
+
+                status.innerText = "✅ Análise Concluída!";
+                btn.disabled = false;
+
+            } catch (error) {
+                console.error(error);
+                status.innerText = "❌ Erro: " + error.message;
+                btn.disabled = false;
+            }
+        }
+
+        window.copyToClipboard = function(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => alert("Copiado!"));
+        }
+
+        checkAuth();
+    </script>
+</body>
+</html>
